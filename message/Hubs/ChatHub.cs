@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using message.Data;
 using message.Entities;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 
 namespace message.Hubs
 {
@@ -16,15 +16,18 @@ namespace message.Hubs
             _db = db;
         }
 
-        // 🔹 Register connection to a "user-{id}" group
+        // 🔹 Register a connection to "user-{id}" group
         public async Task Register(string userId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
         }
 
-        // 🔹 Send a message (public or private) with persistence
+        // 🔹 Send a message (with optional persistence + private/public)
         public async Task SendMessage(string senderId, string receiverId, string text, long? attachmentId = null)
         {
+            if (string.IsNullOrWhiteSpace(text) && attachmentId == null)
+                return; // Ignore empty messages with no attachments
+
             var message = new Message
             {
                 SenderId = senderId,
@@ -37,7 +40,7 @@ namespace message.Hubs
             _db.Messages.Add(message);
             await _db.SaveChangesAsync();
 
-            // Minimal DTO for clients
+            // Minimal DTO for clients (avoid sending navigation props)
             var dto = new
             {
                 message.Id,
@@ -50,18 +53,18 @@ namespace message.Hubs
 
             if (message.ReceiverId == null)
             {
-                // Public chat → broadcast to all
+                // Public chat → broadcast to everyone
                 await Clients.All.SendAsync("ReceiveMessage", dto);
             }
             else
             {
-                // Private chat → only sender & receiver groups
+                // Private chat → deliver to sender & receiver groups
                 await Clients.Group($"user-{message.ReceiverId}").SendAsync("ReceiveMessage", dto);
                 await Clients.Group($"user-{message.SenderId}").SendAsync("ReceiveMessage", dto);
             }
         }
 
-        // 🔹 Typing indicators
+        // 🔹 Typing indicator (notify public or private receiver)
         public async Task Typing(string userId, string receiverId, bool isTyping)
         {
             if (string.IsNullOrEmpty(receiverId))
@@ -74,16 +77,15 @@ namespace message.Hubs
             }
         }
 
-        // 🔹 Connection handling
+        // 🔹 On connection (optional auto-register if you use Claims/UserIdentifier)
         public override async Task OnConnectedAsync()
         {
-            // You can auto-register here if you map Context.UserIdentifier
             await base.OnConnectedAsync();
         }
 
+        // 🔹 On disconnection
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            // Optionally: cleanup groups on disconnect
             await base.OnDisconnectedAsync(exception);
         }
     }

@@ -1,44 +1,32 @@
-using message.Data;
-using message.Hubs;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using message.Hubs; // ?? Make sure namespace matches your project
 
-namespace message
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services
+builder.Services.AddRazorPages();
+builder.Services.AddSignalR();
+
+var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
 {
-    public class Program
-    {
-        public static void Main(string[] args)
-        {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add services to the container.
-            builder.Services.AddRazorPages();
-            builder.Services.AddSignalR();
-
-            // Configure EF Core (SQL Server example) - replace connection string in appsettings.json
-            builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-            var app = builder.Build();
-
-            // Configure the HTTP request pipeline.
-            if (!app.Environment.IsDevelopment())
-            {
-                app.UseExceptionHandler("/Error");
-                app.UseHsts();
-            }
-
-            app.UseHttpsRedirection();
-            app.UseStaticFiles(); // ?? required for JS/CSS/SignalR client + uploads
-
-            app.UseRouting();
-            app.UseAuthorization();
-
-            app.MapRazorPages();
-
-            // Map SignalR hub
-            app.MapHub<ChatHub>("/chatHub");
-
-            app.Run();
-        }
-    }
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
 }
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseAuthorization();
+
+app.MapRazorPages();
+
+// ?? This line is REQUIRED for messages to work
+app.MapHub<ChatHub>("/chatHub");
+
+app.Run();
