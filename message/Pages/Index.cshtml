@@ -1,0 +1,75 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Chat";
+}
+
+<h2>SignalR Chat</h2>
+
+<div>
+    <label>Your Id (for demo):</label>
+    <input id="userId" value="user1" />
+
+    <label>Chat with (leave empty for public):</label>
+    <input id="otherUserId" placeholder="other user id or empty for public" />
+</div>
+
+<div>
+    <input type="text" id="messageInput" placeholder="Write a message..." />
+    <button onclick="sendMessage()">Send</button>
+</div>
+
+<ul id="messagesList"></ul>
+
+<!-- SignalR script -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+
+<script>
+    // Connect to SignalR hub
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/chatHub")
+        .build();
+
+    // Receive messages
+    connection.on("ReceiveMessage", (msg) => {
+        const li = document.createElement("li");
+        if (msg.receiverId) {
+            li.textContent = `[Private] ${msg.senderId} → ${msg.receiverId}: ${msg.text}`;
+        } else {
+            li.textContent = `${msg.senderId}: ${msg.text}`;
+        }
+        document.getElementById("messagesList").appendChild(li);
+    });
+
+    // Typing indicator
+    connection.on("UserTyping", (userId, isTyping) => {
+        console.log(`${userId} is ${isTyping ? "typing..." : "stopped typing"}`);
+    });
+
+    // Start connection
+    connection.start().then(() => {
+        const userId = document.getElementById("userId").value;
+        // Register current user in group
+        connection.invoke("Register", userId);
+    }).catch(err => console.error(err.toString()));
+
+    // Send message
+    function sendMessage() {
+        const senderId = document.getElementById("userId").value;
+        const receiverId = document.getElementById("otherUserId").value;
+        const text = document.getElementById("messageInput").value;
+
+        connection.invoke("SendMessage", senderId, receiverId, text)
+            .catch(err => console.error(err.toString()));
+
+        document.getElementById("messageInput").value = "";
+    }
+
+    // Send typing indicator when typing
+    const messageInput = document.getElementById("messageInput");
+    messageInput.addEventListener("input", () => {
+        const userId = document.getElementById("userId").value;
+        const receiverId = document.getElementById("otherUserId").value;
+        connection.invoke("Typing", userId, receiverId, messageInput.value.length > 0);
+    });
+</script>
